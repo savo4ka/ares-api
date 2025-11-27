@@ -135,5 +135,10 @@ func cleanupExpiredSecrets(repo *repository.SecretRepository, m *metrics.Metrics
 			m.SecretsCleanedUpTotal.Add(float64(deleted))
 			log.Printf("Cleaned up %d expired secrets", deleted)
 		}
+
+		// Обновляем метрику активных секретов
+		if count, err := repo.GetActiveSecretsCount(); err == nil {
+			m.UpdateActiveSecretsGauge(count)
+		}
 	}
 }

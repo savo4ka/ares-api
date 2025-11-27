@@ -141,3 +141,21 @@ func (r *SecretRepository) DeleteByID(id string) error {
 
 	return nil
 }
+
+// GetActiveSecretsCount возвращает количество активных секретов
+// Активные секреты - это секреты, которые не были прочитаны и не истекли
+func (r *SecretRepository) GetActiveSecretsCount() (int64, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM secrets
+		WHERE is_accessed = FALSE AND expires_at > $1
+	`
+
+	var count int64
+	err := r.db.QueryRow(query, time.Now()).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get active secrets count: %w", err)
+	}
+
+	return count, nil
+}

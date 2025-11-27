@@ -227,6 +227,33 @@ scrape_configs:
     scrape_interval: 15s
 ```
 
+**Grafana Dashboard:**
+
+Проект включает готовый дашборд Grafana ([grafana/dashboards/ares-api-dashboard.json](grafana/dashboards/ares-api-dashboard.json)) со следующими панелями:
+
+**Overview:**
+- Количество созданных секретов за 24 часа
+- Количество прочитанных секретов за 24 часа
+- Текущее количество активных секретов (gauge)
+- Количество удалённых секретов за 24 часа
+
+**HTTP Metrics:**
+- Частота HTTP запросов по методу и endpoint
+- Перцентили длительности запросов (p50, p95)
+- Распределение HTTP status кодов
+
+**Business Metrics:**
+- Скорость создания и чтения секретов
+- История активных секретов
+- Попытки прочитать уже прочитанные/истёкшие секреты
+- Скорость очистки секретов
+
+**Errors & Health:**
+- Ошибки шифрования/расшифровки
+- Статус приложения
+
+Дашборд автоматически загружается при запуске с профилем `monitoring`.
+
 ## Безопасность
 
 ### Шифрование
@@ -327,9 +354,13 @@ docker-compose down -v
 ```
 
 После запуска:
-- API: http://localhost:8080
-- Prometheus: http://localhost:9090 (если включен профиль monitoring)
-- Grafana: http://localhost:3000 (если включен профиль monitoring, логин: admin/admin)
+- **API**: http://localhost:8080
+- **Prometheus**: http://localhost:9090 (если включен профиль monitoring)
+- **Grafana**: http://localhost:3000 (если включен профиль monitoring, логин: admin/admin)
+
+При запуске с профилем `monitoring`, Grafana автоматически загружает:
+- Datasource для Prometheus
+- Готовый дашборд "Ares API Dashboard" со всеми метриками приложения
 
 ### Сборка Docker образа
 
