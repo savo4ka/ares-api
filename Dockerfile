@@ -2,7 +2,7 @@
 # Multi-stage build для минимизации размера образа
 
 # Stage 1: Builder
-FROM golang:1.21-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Устанавливаем необходимые инструменты
 RUN apk add --no-cache git ca-certificates tzdata
