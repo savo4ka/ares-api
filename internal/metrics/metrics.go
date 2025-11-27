@@ -97,3 +97,9 @@ func New() *Metrics {
 		),
 	}
 }
+
+// UpdateActiveSecretsGauge обновляет метрику активных секретов
+// Принимает текущее количество активных секретов
+func (m *Metrics) UpdateActiveSecretsGauge(count int64) {
+	m.ActiveSecretsGauge.Set(float64(count))
+}

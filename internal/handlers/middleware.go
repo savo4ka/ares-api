@@ -2,12 +2,23 @@ package handlers
 
 import (
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/savo4ka/ares-api/internal/metrics"
 )
+
+var (
+	// Регулярное выражение для поиска UUID в путях
+	uuidRegex = regexp.MustCompile(`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
+)
+
+// normalizeEndpoint нормализует путь для метрик, заменяя UUID на {id}
+func normalizeEndpoint(path string) string {
+	return uuidRegex.ReplaceAllString(path, "{id}")
+}
 
 // CORSMiddleware добавляет CORS заголовки к ответам
 func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
@@ -84,9 +95,12 @@ func MetricsMiddleware(m *metrics.Metrics) func(http.Handler) http.Handler {
 			duration := time.Since(start).Seconds()
 			statusCode := strconv.Itoa(rw.statusCode)
 
+			// Нормализуем путь для предотвращения высокой кардинальности метрик
+			normalizedPath := normalizeEndpoint(r.URL.Path)
+
 			// Записываем метрики
-			m.HTTPRequestsTotal.WithLabelValues(r.Method, r.URL.Path, statusCode).Inc()
-			m.HTTPRequestDuration.WithLabelValues(r.Method, r.URL.Path).Observe(duration)
+			m.HTTPRequestsTotal.WithLabelValues(r.Method, normalizedPath, statusCode).Inc()
+			m.HTTPRequestDuration.WithLabelValues(r.Method, normalizedPath).Observe(duration)
 		})
 	}
 }

@@ -80,6 +80,11 @@ func (h *SecretHandler) CreateSecret(w http.ResponseWriter, r *http.Request) {
 	// Инкрементируем метрику созданных секретов
 	h.metrics.SecretsCreatedTotal.Inc()
 
+	// Обновляем метрику активных секретов
+	if count, err := h.repo.GetActiveSecretsCount(); err == nil {
+		h.metrics.UpdateActiveSecretsGauge(count)
+	}
+
 	// Формируем URL для доступа к секрету
 	secretURL := fmt.Sprintf("%s/secret/%s", h.baseURL, secret.ID)
 
@@ -145,6 +150,11 @@ func (h *SecretHandler) GetSecret(w http.ResponseWriter, r *http.Request) {
 
 	// Инкрементируем метрику успешно прочитанных секретов
 	h.metrics.SecretsReadTotal.Inc()
+
+	// Обновляем метрику активных секретов
+	if count, err := h.repo.GetActiveSecretsCount(); err == nil {
+		h.metrics.UpdateActiveSecretsGauge(count)
+	}
 
 	// Возвращаем расшифрованный контент
 	response := models.GetSecretResponse{
