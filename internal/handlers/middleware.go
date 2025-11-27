@@ -2,7 +2,11 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
+
+	"github.com/savo4ka/ares-api/internal/metrics"
 )
 
 // CORSMiddleware добавляет CORS заголовки к ответам
@@ -45,4 +49,44 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		// Простое логирование - можно расширить
 		next.ServeHTTP(w, r)
 	})
+}
+
+// responseWriter является wrapper для http.ResponseWriter для отслеживания status code
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func newResponseWriter(w http.ResponseWriter) *responseWriter {
+	return &responseWriter{w, http.StatusOK}
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+// MetricsMiddleware отслеживает метрики HTTP запросов
+func MetricsMiddleware(m *metrics.Metrics) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Пропускаем метрики для /metrics эндпоинта
+			if r.URL.Path == "/metrics" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			start := time.Now()
+			rw := newResponseWriter(w)
+
+			next.ServeHTTP(rw, r)
+
+			duration := time.Since(start).Seconds()
+			statusCode := strconv.Itoa(rw.statusCode)
+
+			// Записываем метрики
+			m.HTTPRequestsTotal.WithLabelValues(r.Method, r.URL.Path, statusCode).Inc()
+			m.HTTPRequestDuration.WithLabelValues(r.Method, r.URL.Path).Observe(duration)
+		})
+	}
 }

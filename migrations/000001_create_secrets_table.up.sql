@@ -1,4 +1,3 @@
--- +migrate Up
 -- Создание таблицы для хранения секретов
 CREATE TABLE IF NOT EXISTS secrets (
     id VARCHAR(36) PRIMARY KEY,
@@ -15,9 +14,3 @@ CREATE INDEX IF NOT EXISTS idx_secrets_expires_at ON secrets(expires_at);
 
 -- Создание индекса для поиска по is_accessed
 CREATE INDEX IF NOT EXISTS idx_secrets_is_accessed ON secrets(is_accessed);
-
--- +migrate Down
--- Удаление таблицы при откате миграции
-DROP INDEX IF EXISTS idx_secrets_is_accessed;
-DROP INDEX IF EXISTS idx_secrets_expires_at;
-DROP TABLE IF EXISTS secrets;

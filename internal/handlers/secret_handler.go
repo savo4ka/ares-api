@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/savo4ka/ares-api/internal/crypto"
+	"github.com/savo4ka/ares-api/internal/metrics"
 	"github.com/savo4ka/ares-api/internal/models"
 	"github.com/savo4ka/ares-api/internal/repository"
 )
@@ -18,14 +19,16 @@ type SecretHandler struct {
 	repo              *repository.SecretRepository
 	encryptionService *crypto.EncryptionService
 	baseURL           string
+	metrics           *metrics.Metrics
 }
 
 // NewSecretHandler создаёт новый обработчик секретов
-func NewSecretHandler(repo *repository.SecretRepository, encryptionService *crypto.EncryptionService, baseURL string) *SecretHandler {
+func NewSecretHandler(repo *repository.SecretRepository, encryptionService *crypto.EncryptionService, baseURL string, m *metrics.Metrics) *SecretHandler {
 	return &SecretHandler{
 		repo:              repo,
 		encryptionService: encryptionService,
 		baseURL:           baseURL,
+		metrics:           m,
 	}
 }
 
@@ -53,6 +56,7 @@ func (h *SecretHandler) CreateSecret(w http.ResponseWriter, r *http.Request) {
 	// Шифруем контент
 	encryptedData, err := h.encryptionService.Encrypt(req.Content)
 	if err != nil {
+		h.metrics.EncryptionErrorsTotal.Inc()
 		respondWithError(w, http.StatusInternalServerError, "Failed to encrypt secret")
 		return
 	}
@@ -72,6 +76,9 @@ func (h *SecretHandler) CreateSecret(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusInternalServerError, "Failed to create secret")
 		return
 	}
+
+	// Инкрементируем метрику созданных секретов
+	h.metrics.SecretsCreatedTotal.Inc()
 
 	// Формируем URL для доступа к секрету
 	secretURL := fmt.Sprintf("%s/secret/%s", h.baseURL, secret.ID)
@@ -105,12 +112,14 @@ func (h *SecretHandler) GetSecret(w http.ResponseWriter, r *http.Request) {
 
 	// Проверяем, не истёк ли срок действия
 	if secret.IsExpired() {
+		h.metrics.SecretsExpiredReadTotal.Inc()
 		respondWithError(w, http.StatusGone, "Secret has expired")
 		return
 	}
 
 	// Проверяем, не был ли уже прочитан
 	if secret.IsAccessed {
+		h.metrics.SecretsAlreadyReadTotal.Inc()
 		respondWithError(w, http.StatusGone, "Secret has already been accessed")
 		return
 	}
@@ -123,6 +132,7 @@ func (h *SecretHandler) GetSecret(w http.ResponseWriter, r *http.Request) {
 
 	plaintext, err := h.encryptionService.Decrypt(encryptedData)
 	if err != nil {
+		h.metrics.DecryptionErrorsTotal.Inc()
 		respondWithError(w, http.StatusInternalServerError, "Failed to decrypt secret")
 		return
 	}
@@ -132,6 +142,9 @@ func (h *SecretHandler) GetSecret(w http.ResponseWriter, r *http.Request) {
 		// Логируем ошибку, но не возвращаем пользователю, т.к. секрет уже расшифрован
 		fmt.Printf("Warning: failed to mark secret as accessed: %v\n", err)
 	}
+
+	// Инкрементируем метрику успешно прочитанных секретов
+	h.metrics.SecretsReadTotal.Inc()
 
 	// Возвращаем расшифрованный контент
 	response := models.GetSecretResponse{

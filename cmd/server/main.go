@@ -12,10 +12,12 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/savo4ka/ares-api/internal/config"
 	"github.com/savo4ka/ares-api/internal/crypto"
 	"github.com/savo4ka/ares-api/internal/database"
 	"github.com/savo4ka/ares-api/internal/handlers"
+	"github.com/savo4ka/ares-api/internal/metrics"
 	"github.com/savo4ka/ares-api/internal/repository"
 )
 
@@ -46,12 +48,15 @@ func main() {
 		log.Fatalf("Failed to create encryption service: %v", err)
 	}
 
+	// Инициализируем метрики
+	appMetrics := metrics.New()
+
 	// Создаём репозиторий
 	secretRepo := repository.NewSecretRepository(db)
 
 	// Создаём handlers
 	baseURL := fmt.Sprintf("http://localhost:%s", cfg.ServerPort)
-	secretHandler := handlers.NewSecretHandler(secretRepo, encryptionService, baseURL)
+	secretHandler := handlers.NewSecretHandler(secretRepo, encryptionService, baseURL, appMetrics)
 
 	// Настраиваем роутер
 	router := mux.NewRouter()
@@ -59,6 +64,7 @@ func main() {
 	// Применяем middleware
 	router.Use(handlers.CORSMiddleware(cfg.AllowedOrigins))
 	router.Use(handlers.LoggingMiddleware)
+	router.Use(handlers.MetricsMiddleware(appMetrics))
 
 	// API routes
 	api := router.PathPrefix("/api").Subrouter()
@@ -68,8 +74,11 @@ func main() {
 	// Health check
 	router.HandleFunc("/health", secretHandler.HealthCheck).Methods("GET")
 
+	// Metrics endpoint
+	router.Handle("/metrics", promhttp.Handler()).Methods("GET")
+
 	// Запускаем фоновую задачу по очистке истёкших секретов
-	go cleanupExpiredSecrets(secretRepo)
+	go cleanupExpiredSecrets(secretRepo, appMetrics)
 
 	// Настраиваем HTTP сервер
 	srv := &http.Server{
@@ -110,7 +119,7 @@ func main() {
 }
 
 // cleanupExpiredSecrets периодически удаляет истёкшие секреты из БД
-func cleanupExpiredSecrets(repo *repository.SecretRepository) {
+func cleanupExpiredSecrets(repo *repository.SecretRepository, m *metrics.Metrics) {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
@@ -122,6 +131,8 @@ func cleanupExpiredSecrets(repo *repository.SecretRepository) {
 		}
 
 		if deleted > 0 {
+			// Добавляем количество удалённых секретов к метрике
+			m.SecretsCleanedUpTotal.Add(float64(deleted))
 			log.Printf("Cleaned up %d expired secrets", deleted)
 		}
 	}
