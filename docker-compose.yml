@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL база данных
   postgres:
@@ -21,14 +19,31 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - ares-network
+      - ares-service
 
+  ares-ui:
+    image: ghcr.io/savo4ka/ares-ui:latest
+    container_name: ares-ui
+    restart: always
+    ports:
+      - "80:80"  # Слушаем только на localhost
+    depends_on:
+      ares-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - ares-service
   # Ares API приложение
-  app:
+  ares-api:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ares-api
+    container_name: ghcr.io/savo4ka/ares-api:latest
     restart: unless-stopped
     environment:
       SERVER_PORT: 8080
@@ -41,7 +56,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - ares-network
+      - ares-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -62,12 +77,12 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
-    ports:
-      - "9090:9090"
+    # ports:
+    #   - "9090:9090"
     depends_on:
-      - app
+      - ares-api
     networks:
-      - ares-network
+      - ares-service
     profiles:
       - monitoring
 
@@ -90,13 +105,15 @@ services:
     depends_on:
       - prometheus
     networks:
-      - ares-network
+      - ares-service
     profiles:
       - monitoring
 
 networks:
   ares-network:
     driver: bridge
+    name: ares-service
+    external: false
 
 volumes:
   postgres_data:
